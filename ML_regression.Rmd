@@ -1,0 +1,125 @@
+---
+title: "Regression Machine Learning"
+output:
+  github_document: default
+---
+## Introduction
+
+```{r, message=FALSE}
+library(PerformanceAnalytics)
+library(ggplot2)
+library(Metrics)
+library(tsensembler)
+
+#reading file
+beijing.pm <- read.csv("~/Desktop/learning/ML/PRSA_data_2010.1.1-2014.12.31.csv", stringsAsFactors = FALSE)
+
+#overview of the data
+dim(beijing.pm)
+head(beijing.pm)
+tail(beijing.pm)
+str(beijing.pm)
+summary(beijing.pm)
+
+#missing values of the data
+sum(is.na(beijing.pm))
+
+(2067/43924) * 100
+```
+
+The missing value in the dataset is remove. Since missing value only represents 4.705% of the data. Thus, it does not have the huge impact on the dataset once it is removed
+```{r}
+
+beijing.pm.omit <- na.omit(beijing.pm)
+
+sum(is.na(beijing.pm.omit))
+
+summary(beijing.pm.omit)
+```
+
+## Exploratory data analysis
+```{r, warning=FALSE, message=FALSE}
+#correlation
+#get the desire variables
+
+beijing.pm.corr <- beijing.pm.omit[,c(6,7,8,9)]
+
+chart.Correlation(beijing.pm.corr, histogram=TRUE, method = "pearson")
+```
+
+The correlation shows that PM2.5 is highly correlated with Dew Point, Temperature and Pressure.
+
+### Preparing for training and test set
+```{r}
+#shuffle dataset and create train and test set
+set.seed(1234567)
+n <- nrow(beijing.pm.corr)
+shuffled <- beijing.pm.corr[sample(n),]
+
+train <- shuffled[1:round(0.7 * n),]
+test <- shuffled[(round(0.7 * n) + 1):n,]
+
+summary(train)
+summary(test)
+```
+
+##Trainning the model
+
+```{r}
+model.train <- lm(pm2.5 ~ ., data = train)
+round(model.train$coefficients,3)
+```
+
+Checking confidence interval
+```{r}
+round(confint(model.train, level = 0.95), 3)
+```
+
+Check the model performance
+```{r}
+summary(model.train)
+```
+
+```{r}
+plot(model.train)
+```
+
+Assessing test set performance
+```{r}
+pred <- predict(model.train, test)
+head(pred)
+```
+
+Plotting of train and test data against actural performance
+```{r}
+train$pred <- predict(model.train)
+test$pred <- predict(model.train, test)
+
+plot.train <- ggplot(train, aes(x = pred, y = pm2.5)) +
+  geom_point() +
+  geom_abline(color = "red")
+
+plot.test <- ggplot(test, aes(x = pred, y = pm2.5)) +
+  geom_point() +
+  geom_abline(color = "red")
+
+plot.train
+plot.test
+```
+
+```{r}
+# Evaluate the rmse on both training and test data and print them
+(rmse_train <- rmse(train$pred, train$pm2.5))
+(rmse_test <- rmse(test$pred, test$pm2.5))
+
+
+# Evaluate the r-squared on both training and test data.and print them
+train.rss <- sum((train$pred - train$pm2.5) ^ 2)
+train.tss <- sum((train$pm2.5 - mean(train$pm2.5)) ^ 2)
+(rsq <- 1 - train.rss/train.tss)
+
+test.rss <- sum((test$pred - test$pm2.5) ^ 2)
+test.tss <- sum((test$pm2.5 - mean(test$pm2.5)) ^ 2)
+(rsq <- 1 - test.rss/test.tss)
+
+```
